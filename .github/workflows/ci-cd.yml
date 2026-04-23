@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4   # ✅ updated
 
       - name: 🔨 Build Docker Image
         run: |
@@ -67,7 +67,21 @@ jobs:
     needs: test
 
     steps:
-      - name: 🚀 Deploy to EC2
+      - name: ⬇️ Download Docker Image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: 📤 Copy image to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "devops-demo.tar"
+          target: "/home/ec2-user/"
+
+      - name: 🚀 Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -81,20 +95,14 @@ jobs:
 
             cd /home/ec2-user
 
-            rm -rf demo-app
-
-            echo "Cloning repo..."
-            GIT_ASKPASS=true git clone https://github.com/akshayhole07/demo-app.git
-
-            cd demo-app
+            echo "Loading Docker image..."
+            sudo docker load -i devops-demo.tar
 
             echo "Stopping old container..."
             sudo docker rm -f nginx-container || true
 
-            echo "Building new image..."
-            sudo docker build -t nginx-devops-demo .
-
             echo "Starting new container..."
-            sudo docker run -d -p 80:80 --name nginx-container nginx-devops-demo
+            sudo docker run -d -p 80:80 --name nginx-container devops-demo
 
+            echo "Running containers:"
             sudo docker ps -a
